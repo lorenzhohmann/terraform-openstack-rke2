@@ -2,12 +2,25 @@ output "external_ip" {
   value = local.external_ip
 }
 
-output "load_balancer_id" {
-  value = openstack_lb_loadbalancer_v2.lb.id
+output "outgoing_ip" {
+  value = openstack_networking_router_v2.router.external_fixed_ip[0].ip_address
+}
+
+output "network_id" {
+  value = openstack_networking_network_v2.net.id
+}
+
+output "lb_subnet_id" {
+  value = openstack_networking_subnet_v2.lb.id
 }
 
 output "restore_cmd" {
-  value     = "sudo systemctl stop rke2-server && sudo rke2 server --cluster-reset --etcd-s3 --etcd-s3-bucket=${local.s3.bucket} --etcd-s3-access-key=${local.s3.access_key} --etcd-s3-secret-key=${local.s3.access_secret} --cluster-reset-restore-path=[filename]"
+  value     = "sudo rke2 server --cluster-reset --etcd-s3 --etcd-s3-bucket=${local.s3.bucket} --etcd-s3-access-key=${local.s3.access_key} --etcd-s3-secret-key=${local.s3.access_secret} --cluster-reset-restore-path=[filename]"
+  sensitive = true
+}
+
+output "ssh_cmd" {
+  value     = "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=accept-new -o ForwardAgent=yes ubuntu@${local.external_ip}"
   sensitive = true
 }
 

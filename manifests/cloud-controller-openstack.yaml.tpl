@@ -6,11 +6,11 @@ metadata:
 spec:
   chart: openstack-cloud-controller-manager
   repo: https://kubernetes.github.io/cloud-provider-openstack
-  version: 2.27.1
+  version: 2.28.3
   targetNamespace: kube-system
   bootstrap: true
   valuesContent: |-
-    logVerbosityLevel: 4 # 2
+    logVerbosityLevel: 2
     nodeSelector:
       node-role.kubernetes.io/master: "true"
     tolerations:
@@ -22,7 +22,9 @@ spec:
         value: "true"
     resources:
       requests:
-        cpu: 50m
+        cpu: 25m
+        memory: 64Mi
+      limits:
         memory: 64Mi
     cloudConfig:
       global:

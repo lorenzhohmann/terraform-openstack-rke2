@@ -8,13 +8,36 @@ resource "openstack_networking_secgroup_v2" "agent" {
   delete_default_rules = true
 }
 
-resource "openstack_networking_secgroup_rule_v2" "lb_server" {
+resource "openstack_networking_secgroup_rule_v2" "server_outside4" {
+  direction         = "egress"
+  ethertype         = "IPv4"
+  security_group_id = openstack_networking_secgroup_v2.server.id
+}
+
+resource "openstack_networking_secgroup_rule_v2" "server_outside6" {
+  direction         = "egress"
+  ethertype         = "IPv6"
+  security_group_id = openstack_networking_secgroup_v2.server.id
+}
+
+resource "openstack_networking_secgroup_rule_v2" "agent_outside4" {
+  direction         = "egress"
+  ethertype         = "IPv4"
+  security_group_id = openstack_networking_secgroup_v2.agent.id
+}
+
+resource "openstack_networking_secgroup_rule_v2" "agent_outside6" {
+  direction         = "egress"
+  ethertype         = "IPv6"
+  security_group_id = openstack_networking_secgroup_v2.agent.id
+}
+
+resource "openstack_networking_secgroup_rule_v2" "outside_servers" {
   for_each = {
-    for rule in [
-      { "port" : 22, "protocol" : "tcp", "source" : var.subnet_lb_cidr },
-      { "port" : 6443, "protocol" : "tcp", "source" : var.subnet_lb_cidr },
-      { "port" : 9345, "protocol" : "tcp", "source" : var.subnet_lb_cidr },
-    ] :
+    for rule in concat(
+      var.rules_ssh_cidr != null ? [{ "port" : 22, "protocol" : "tcp", "source" : var.rules_ssh_cidr }] : [],
+      var.rules_k8s_cidr != null ? [{ "port" : 6443, "protocol" : "tcp", "source" : var.rules_k8s_cidr }] : [],
+    ) :
     format("%s-%s-%s", rule["source"], rule["protocol"], rule["port"]) => rule
   }
   direction         = "ingress"
@@ -24,30 +47,6 @@ resource "openstack_networking_secgroup_rule_v2" "lb_server" {
   port_range_max    = each.value.port
   remote_ip_prefix  = each.value.source
   security_group_id = openstack_networking_secgroup_v2.server.id
-}
-
-resource "openstack_networking_secgroup_rule_v2" "server4" {
-  direction         = "egress"
-  ethertype         = "IPv4"
-  security_group_id = openstack_networking_secgroup_v2.server.id
-}
-
-resource "openstack_networking_secgroup_rule_v2" "server6" {
-  direction         = "egress"
-  ethertype         = "IPv6"
-  security_group_id = openstack_networking_secgroup_v2.server.id
-}
-
-resource "openstack_networking_secgroup_rule_v2" "agent4" {
-  direction         = "egress"
-  ethertype         = "IPv4"
-  security_group_id = openstack_networking_secgroup_v2.agent.id
-}
-
-resource "openstack_networking_secgroup_rule_v2" "agent6" {
-  direction         = "egress"
-  ethertype         = "IPv6"
-  security_group_id = openstack_networking_secgroup_v2.agent.id
 }
 
 resource "openstack_networking_secgroup_rule_v2" "default" {

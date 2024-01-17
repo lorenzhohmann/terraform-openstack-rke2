@@ -6,7 +6,7 @@ metadata:
 spec:
   chart: openstack-cinder-csi
   repo: https://kubernetes.github.io/cloud-provider-openstack
-  version: 2.27.1
+  version: 2.28.1
   targetNamespace: kube-system
   bootstrap: true
   valuesContent: |-
@@ -16,6 +16,7 @@ spec:
           requests:
             cpu: 20m
             memory: 32M
+          limits:
       provisioner:
         topology: "true"
         resources:
@@ -35,12 +36,16 @@ spec:
       livenessprobe:
         resources:
           requests:
-            cpu: 20m
+            cpu: 10m
+            memory: 16M
+          limits:
             memory: 32M
       nodeDriverRegistrar:
         resources:
           requests:
-            cpu: 20m
+            cpu: 10m
+            memory: 16M
+          limits:
             memory: 32M
       plugin:
         nodePlugin:
@@ -61,6 +66,12 @@ spec:
             - effect: NoExecute
               key: CriticalAddonsOnly
               operator: "Exists"
+        resources:
+          requests:
+            cpu: 25m
+            memory: 128Mi
+          limits:
+            memory: 256Mi
     secret:
       enabled: true
       create: true

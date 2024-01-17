@@ -17,12 +17,12 @@ defaults for running production workload.
 
 - [RKE2](https://docs.rke2.io) Kubernetes distribution : lightweight, stable,
   simple and secure
-- persisted `/var/lib/rancher/rke2` for single server durability
-- configure Openstack Swift or S3-like backend for automated etcd snapshots
+- persisted `/var/lib/rancher/rke2` when there is a single server
+- automated etcd snapshots with Openstack Swift support or other S3-like backend
 - smooth updates & agent nodes autoremoval with pod draining
-- bundled with Openstack Cloud Controller and Cinder CSI
+- integrated Openstack Cloud Controller (load-balancer, etc.) and Cinder CSI
 - Cilium networking (network policy support and no kube-proxy)
-- highly-available through load balancers
+- highly-available via kube-vip and dynamic peering (no load-balancer required)
 - out of the box support for volume snapshot and Velero
 
 ### Versioning
@@ -30,9 +30,9 @@ defaults for running production workload.
 | Component                  | Version                                                                                                                  |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | OpenStack                  | 2023.1 Antelope (verified), maybe older version are supported too                                                        |
-| RKE2                       | [v1.26.6+rke2r1](https://github.com/rancher/rke2/releases/tag/v1.26.6%2Brke2r1)                                          |
-| OpenStack Cloud Controller | [v1.27.1](https://github.com/kubernetes/cloud-provider-openstack/tree/v1.27.1/charts/openstack-cloud-controller-manager) |
-| OpenStack Cinder           | [v1.27.1](https://github.com/kubernetes/cloud-provider-openstack/tree/v1.27.1/charts/cinder-csi-plugin)                  |
+| RKE2                       | [v1.29.0+rke2r1](https://github.com/rancher/rke2/releases/tag/v1.29.0+rke2r1)                                            |
+| OpenStack Cloud Controller | [v1.28.1](https://github.com/kubernetes/cloud-provider-openstack/tree/v1.28.1/charts/openstack-cloud-controller-manager) |
+| OpenStack Cinder           | [v1.28.1](https://github.com/kubernetes/cloud-provider-openstack/tree/v1.28.1/charts/cinder-csi-plugin)                  |
 | Velero                     | [v2.32.6](https://github.com/vmware-tanzu/helm-charts/tree/velero-2.32.6/charts/velero)                                  |
 
 ## Getting started
@@ -52,11 +52,11 @@ kubectl --kubeconfig single-server.rke2.yaml get nodes
 # k8s-pool-a-1   Ready    <none>                      119s    v1.21.5+rke2r2
 # k8s-server-1   Ready    control-plane,etcd,master   2m22s   v1.21.5+rke2r2
 
+# get SSH and restore helpers
+terraform output -json
+
 # on upgrade, process node pool by node pool
 terraform apply -target='module.rke2.module.servers["server-a"]'
-# for servers, apply on the majority of nodes, then for the remaining ones
-# this ensures the load balancer routes are updated as well
-terraform apply -target='module.rke2.openstack_lb_members_v2.k8s'
 ```
 
 See [examples](./examples) for more options or this
@@ -68,21 +68,181 @@ Note: it requires [rsync](https://rsync.samba.org) and
 can disable this behavior by setting `ff_write_kubeconfig=false` and fetch
 yourself `/etc/rancher/rke2/rke2.yaml` on server nodes.
 
+## Restoring a backup
+
+```
+# ssh into one of the server nodes (see terraform output -json)
+# restore s3 snapshot (see restore_cmd output of the terraform module):
+sudo systemctl stop rke2-server
+sudo rke2 server --cluster-reset --etcd-s3 --etcd-s3-bucket=BUCKET_NAME --etcd-s3-access-key=ACCESS_KEY --etcd-s3-secret-key=SECRET_KEY --cluster-reset-restore-path=SNAPSHOT_PATH
+sudo systemctl start rke2-server
+# exit and ssh on the other server nodes to remove the etcd db
+# (recall that you may need to ssh into one node as a bastion then to the others):
+sudo systemctl stop rke2-server
+sudo rm -rf /var/lib/rancher/rke2/server
+sudo systemctl start rke2-server
+# reboot all nodes one by one to make sure all is stable
+sudo reboot
+```
+
+## Migration guide
+
+### From v2 to v3
+
+```
+# 1. use the previous patch version (2.0.7) to setup an additional san for 192.168.42.4
+# this will become the new VIP inside the cluster and replace the load-balancer:
+source  = "zifeo/rke2/openstack"
+version = "2.0.7"
+# ...
+additional_san = ["192.168.42.4"]
+# 2. run an full upgrade with it, node by node:
+terraform apply -target='module.rke2.module.servers["your-server-pool"]'
+# 3. you can now switch to the new major and remove the additional_san:
+source  = "zifeo/rke2/openstack"
+version = "3.0.0"
+# 4. create the new external IP for admin access (that will be different from the load-balancer) with:
+terraform apply -target='module.rke2.openstack_networking_floatingip_associate_v2.fip'
+# 5. pick a server different from the initial one (used to bootstrap):
+terraform apply -target='module.rke2.module.servers["server-c"].openstack_networking_port_v2.port'
+# 6. give to that server the control of the VIP
+ssh ubuntu@server-c
+sudo su
+modprobe ip_vs
+modprobe ip_vs_rr
+cat <<EOF > /var/lib/rancher/rke2/agent/pod-manifests/kube-vip.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-vip
+  namespace: kube-system
+spec:
+  containers:
+    - name: kube-vip
+      image: ghcr.io/kube-vip/kube-vip:v0.6.4
+      imagePullPolicy: IfNotPresent
+      args:
+        - manager
+      env:
+        - name: vip_arp
+          value: "true"
+        - name: port
+          value: "6443"
+        - name: vip_interface
+          value: ens3
+        - name: vip_cidr
+          value: "32"
+        - name: cp_enable
+          value: "true"
+        - name: cp_namespace
+          value: kube-system
+        - name: vip_ddns
+          value: "false"
+        - name: svc_enable
+          value: "false"
+        - name: vip_leaderelection
+          value: "true"
+        - name: vip_leasename
+          value: plndr-cp-lock
+        - name: vip_leaseduration
+          value: "15"
+        - name: vip_renewdeadline
+          value: "10"
+        - name: vip_retryperiod
+          value: "2"
+        - name: enable_node_labeling
+          value: "true"
+        - name: lb_enable
+          value: "true"
+        - name: lb_port
+          value: "6443"
+        - name: lb_fwdmethod
+          value: local
+        - name: address
+          value: 192.168.42.4
+        - name: prometheus_server
+          value: ":2112"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 64Mi
+        limits:
+          memory: 64Mi
+      securityContext:
+        capabilities:
+          add:
+            - NET_ADMIN
+            - NET_RAW
+      volumeMounts:
+        - mountPath: /etc/kubernetes/admin.conf
+          name: kubeconfig
+  restartPolicy: Always
+  hostAliases:
+    - hostnames:
+        - kubernetes
+      ip: 127.0.0.1
+  hostNetwork: true
+  volumes:
+    - name: kubeconfig
+      hostPath:
+        path: /etc/rancher/rke2/rke2.yaml
+EOF
+# 7. you should see a pod in kube-system starting with kube-vip (investigate if failling)
+# then apply the migration to the initial/bootstraping server:
+terraform apply -target='module.rke2.module.servers["server-a"]'
+terraform apply -target='module.rke2.openstack_networking_secgroup_rule_v2.outside_servers'
+# 8. the cluster IP has now changed, and you should update your kubeconfig with the new ip (look in horizon)
+# 9. import the load-balancer and its ip elsewhere if used (otherwise they will be destroyed)
+cat <<EOF > lb.tf
+resource "openstack_lb_loadbalancer_v2" "lb" {
+  name                  = "lb"
+  vip_network_id        = module.rke2.network_id
+  vip_subnet_id         = module.rke2.lb_subnet_id
+  lifecycle {
+    ignore_changes = [
+      tags
+    ]
+  }
+}
+resource "openstack_networking_floatingip_v2" "external" {
+  pool    = "ext-floating1"
+  port_id = openstack_lb_loadbalancer_v2.lb.vip_port_id
+}
+EOF
+terraform state show module.rke2.openstack_lb_loadbalancer_v2.lb
+terraform import openstack_lb_loadbalancer_v2.lb ID
+terraform state rm module.rke2.openstack_lb_loadbalancer_v2.lb
+terraform state show module.rke2.openstack_networking_floatingip_v2.external
+terraform import openstack_networking_floatingip_v2.external ID
+terraform state rm module.rke2.openstack_networking_floatingip_v2.external
+# 10. continues by upgrading other nodes step-by-step as you would do it normally:
+terraform apply -target='module.rke2.module.POOL["NODE"]'
+# 11. once all the nodes are upgraded, make sure that everything is well applied:
+terraform apply
+```
+
 ## Infomaniak OpenStack
 
 A stable, performant and fully equipped Kubernetes cluster in Switzerland for as
-little as CHF 26.90/month (at the time of writing):
+little as CHF 18.—/month (at the time of writing):
 
-- load-balancer with floating IP (perfect under Cloudflare proxy)
 - 1 server 2cpu/4Go (= master)
-- 1 agent 2cpu/4Go (= worker)
+- 1 agent 1cpu/2Go (= worker)
+- 1 floating IP for admin access (ssh and kubernetes api)
+- 1 floating IP for private network gateway
 
-| Flavour                                                                            | CHF/month |
-| ---------------------------------------------------------------------------------- | --------- |
-| 2×5.88 (instances) + 0.09×2×(4+6) (block storage) + 3.34 (IP) + 10 (load-balancer) | 26.90     |
-| single 2cpu/4go server with 1x4cpu/16Go worker                                     | ~37.—     |
-| 3x2cpu/4go HA servers with 1x4cpu/16Go worker                                      | ~50.—     |
-| 3x2cpu/4go HA servers with 3x4cpu/16Go workers                                     | ~85.—     |
+| Flavour                                                              | CHF/month |
+| -------------------------------------------------------------------- | --------- |
+| 5.88 + 2.93 (instances) + 0.09×2×(6+8) (block storage) + 2×3.34 (IP) | 18.—      |
+| 1x2cpu/4go server with 1x4cpu/16Go worker                            | ~28.—     |
+| 3x2cpu/4go HA servers with 1x4cpu/16Go worker                        | ~41.—     |
+| 3x2cpu/4go HA servers with 3x4cpu/16Go workers                       | ~76.—     |
+
+You may also want to add a load-balancer and bind an additional floating IP for
+public access (e.g. for an ingress controller like ingress-nginx), that will add
+10.00 (load-balancer) + 3.34 (IP) = CHF 13.34/month. Note that physical
+load-balancer can be shared by many Kubernetes load-balancers when there is no
+port collision.
 
 See their technical [documentation](https://docs.infomaniak.cloud) and
 [pricing](https://www.infomaniak.com/fr/hebergement/public-cloud/tarifs).
@@ -97,24 +257,15 @@ crictl
 kubectl (server only)
 
 # logs
-sudo systemctl status rke2-server
+sudo systemctl status rke2-server.service
 journalctl -f -u rke2-server
+
 sudo systemctl status rke2-agent.service
 journalctl -f -u rke2-agent
+
 less /var/lib/rancher/rke2/agent/logs/kubelet.log
 less /var/lib/rancher/rke2/agent/containerd/containerd.log
 less /var/log/cloud-init-output.log
-
-# restore s3 snapshot (see restore_cmd output of the terraform module)
-sudo systemctl stop rke2-server
-sudo rke2 server --cluster-reset --etcd-s3 --etcd-s3-bucket=BUCKET_NAME --etcd-s3-access-key=ACCESS_KEY --etcd-s3-secret-key=SECRET_KEY --cluster-reset-restore-path=SNAPSHOT_PATH
-sudo systemctl start rke2-server
-# remove db on other server nodes
-sudo systemctl stop rke2-server
-sudo rm -rf /var/lib/rancher/rke2/server/db
-sudo systemctl start rke2-server
-# reboot all nodes one by one to make sure all is stable
-sudo reboot
 
 # check san
 openssl s_client -connect 192.168.42.3:10250 </dev/null 2>/dev/null | openssl x509 -inform pem -text

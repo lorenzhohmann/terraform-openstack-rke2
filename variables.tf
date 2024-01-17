@@ -69,6 +69,11 @@ variable "subnet_servers_cidr" {
   default = "192.168.42.0/24"
 }
 
+variable "subnet_servers_vip" {
+  type    = string
+  default = null
+}
+
 variable "subnet_agents_cidr" {
   type    = string
   default = "192.168.43.0/24"
@@ -91,9 +96,9 @@ variable "lb_provider" {
   nullable = false
 }
 
-variable "lb_internal_ip" {
-  type    = string
-  default = null
+variable "additional_san" {
+  type    = list(string)
+  default = []
 }
 
 variable "bootstrap" {
@@ -173,6 +178,72 @@ variable "s3_backup" {
   }
 }
 
+variable "backup_schedule" {
+  type    = string
+  default = null
+}
+
+variable "backup_retention" {
+  type    = number
+  default = null
+}
+
+variable "kube_apiserver_resources" {
+  type = object({
+    requests = optional(object({
+      cpu    = optional(string)
+      memory = optional(string)
+    }))
+    limits = optional(object({
+      cpu    = optional(string)
+      memory = optional(string)
+    }))
+  })
+  default = null
+}
+
+variable "kube_scheduler_resources" {
+  type = object({
+    requests = optional(object({
+      cpu    = optional(string)
+      memory = optional(string)
+    }))
+    limits = optional(object({
+      cpu    = optional(string)
+      memory = optional(string)
+    }))
+  })
+  default = null
+}
+
+variable "kube_controller_manager_resources" {
+  type = object({
+    requests = optional(object({
+      cpu    = optional(string)
+      memory = optional(string)
+    }))
+    limits = optional(object({
+      cpu    = optional(string)
+      memory = optional(string)
+    }))
+  })
+  default = null
+}
+
+variable "etcd_resources" {
+  type = object({
+    requests = optional(object({
+      cpu    = optional(string)
+      memory = optional(string)
+    }))
+    limits = optional(object({
+      cpu    = optional(string)
+      memory = optional(string)
+    }))
+  })
+  default = null
+}
+
 variable "manifests_folder" {
   type    = string
   default = ""
@@ -215,4 +286,9 @@ variable "ff_native_backup" {
 variable "ff_wait_ready" {
   type    = bool
   default = true
+}
+
+variable "ff_patches" {
+  type    = bool
+  default = false
 }
