@@ -93,7 +93,7 @@ module "rke2" {
     }
   ]
 
-  dns_nameservers4 = [ local.local.dns_server ]
+  dns_nameservers4 = [ local.dns_server ]
 
   # enable automatically `kubectl delete node AGENT-NAME` after an agent change
   ff_autoremove_agent = "30s"
