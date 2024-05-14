@@ -78,6 +78,7 @@ module "servers" {
         app_id           = openstack_identity_application_credential_v3.rke2.id
         app_secret       = openstack_identity_application_credential_v3.rke2.secret
         app_name         = openstack_identity_application_credential_v3.rke2.name
+        insecure         = var.insecure
       }),
       "velero.yaml" : templatefile("${path.module}/manifests/velero.yaml.tpl", {
         auth_url      = var.identity_endpoint
@@ -100,6 +101,7 @@ module "servers" {
         floating_network_id = data.openstack_networking_network_v2.floating_net.id
         lb_provider         = var.lb_provider
         cluster_name        = var.name
+        insecure            = var.insecure
       }),
       "patches/rke2-cilium.yaml" : templatefile("${path.module}/patches/rke2-cilium.yaml.tpl", {
         operator_replica = local.operator_replica

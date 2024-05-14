@@ -3,6 +3,11 @@ variable "name" {
   type = string
 }
 
+variable "insecure" {
+  type    = bool
+  default = false
+}
+
 variable "ssh_authorized_keys" {
   type    = list(string)
   default = ["~/.ssh/id_rsa.pub"]
