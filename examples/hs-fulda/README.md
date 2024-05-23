@@ -3,6 +3,7 @@
 This guide outlines the steps to set up an RKE2 Kubernetes cluster on OpenStack using Terraform, based on [this repository](https://github.com/zifeo/terraform-openstack-rke2).
 
 ## Attention
+
 This example implements the deactivation of the validation of all TLS certificates by default. **Never** use this code in a production environment.
 
 ## Usage
@@ -10,17 +11,19 @@ This example implements the deactivation of the validation of all TLS certificat
 ### Requirements
 
 #### Linux
+
 The final step fetches the `kubeconfig` file for Kubernetes clients like `kubectl` and `helm` automatically using `rsync` and `yq`. Note that `rsync` is typically pre-installed on most Linux distributions. Install `yq` from [here](https://github.com/mikefarah/yq/releases).
 
 #### Windows
+
 The final step requires `rsync` and `yq`, which are not available by default on Windows. You have multiple options to handle this (see the table below).
 
-| Method          | Description                                                              | Commands/Instructions                                                                                       |
-|-----------------|--------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| **SSH**         | Manually log in and fetch `rke2.yaml` by assigning a temporary floating IP | ```sh <br> ssh ubuntu@<floating-ip> <br> ```                                                               |
-| **SCP**         | Use `scp` to copy the `kubeconfig` file by assigning a temporary floating IP | ```sh <br> scp ubuntu@<floating-ip>:/etc/rancher/rke2/CloudComp<your-group-number>-k8s.rke2.yaml . <br> ``` |
-| **WSL/WSL2**    | Use Windows Subsystem for Linux (WSL/WSL2) to run Terraform              | Install `yq` from [here](https://github.com/mikefarah/yq/releases).                                         |
-| **Install rsync and yq** | Install `rsync` and `yq` on Windows                                 | Install `rsync` from [here](https://www.rsync.net/resources/howto/windows_rsync.html) and `yq` from [here](https://github.com/mikefarah/yq/releases). |
+| Method                   | Description                                                                  | Commands/Instructions                                                                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SSH**                  | Manually log in and fetch `rke2.yaml` by assigning a temporary floating IP   | `ssh ubuntu@<floating-ip>`                                                                                                                            |
+| **SCP**                  | Use `scp` to copy the `kubeconfig` file by assigning a temporary floating IP | `scp ubuntu@<floating-ip>:/etc/rancher/rke2/CloudComp<your-group-number>-k8s.rke2.yaml`                                                               |
+| **WSL/WSL2**             | Use Windows Subsystem for Linux (WSL/WSL2) to run Terraform                  | Install `yq` from [here](https://github.com/mikefarah/yq/releases).                                                                                   |
+| **Install rsync and yq** | Install `rsync` and `yq` on Windows                                          | Install `rsync` from [here](https://www.rsync.net/resources/howto/windows_rsync.html) and `yq` from [here](https://github.com/mikefarah/yq/releases). |
 
 ### Step 1: Clone the Repository
 
@@ -49,10 +52,14 @@ terraform apply
 
 ### Step 4: Fetch kubeconfig File
 
+This step may take up to 10 minutes to complete as it involves setting up the cluster.
+
 #### Linux Users
-The final step fetches the `kubeconfig` file for Kubernetes clients like `kubectl` and `helm` automatically using `rsync` and `yq`. Note that `rsync` is typically pre-installed on most Linux distributions. Install `yq` from [here](https://github.com/mikefarah/yq/releases).
+
+On Linux the `kubeconfig` file for Kubernetes clients like `kubectl` and `helm` is automatically fetched using `rsync` and `yq`. Note that `rsync` is typically pre-installed on most Linux distributions. Install `yq` from [here](https://github.com/mikefarah/yq/releases).
 
 #### Windows Users
+
 Since `rsync` and `yq` are not available by default on Windows, use one of the methods outlined in the table above to fetch the `kubeconfig` file.
 
 ### Step 5: Handle Deployment Issues
@@ -119,11 +126,13 @@ while ($true) {
 }
 ```
 
-Access WordPress using the `EXTERNAL-IP` from the following command:
+Access WordPress using the `EXTERNAL-IP` from the `my-release-wordpress` LoadBalancer service:
 
 ```sh
 kubectl get svc -n default -w my-release-wordpress
 ```
+
+The allocation of `EXTERNAL-IP` can take a few minutes.
 
 ### Step 7: Clean Up
 
@@ -134,11 +143,12 @@ helm uninstall my-release
 terraform destroy
 ```
 
-Manually delete volumes created by the WordPress Helm Chart in OpenStack to avoid quota issues.
+Make sure that you delete the volumes, load balancers, floating IPs, ports in the network, the subnet in the network, the network and the security groups created by the WordPress Helm Chart in OpenStack if the deprovisioning of the Kubernetes cluster is stuck.
 
 ### Troubleshooting Tips
 
 #### Describe Resources
+
 Get detailed information about nodes, pods, services, or deployments:
 
 ```sh
@@ -146,12 +156,14 @@ kubectl describe <resource-type> <resource-name> -n <namespace>
 ```
 
 Examples:
+
 - Nodes: `kubectl describe nodes`
 - Pods: `kubectl describe pod <pod-name> -n <namespace>`
 - Services: `kubectl describe service <service-name> -n <namespace>`
 - Deployments: `kubectl describe deployment <deployment-name> -n <namespace>`
 
 #### Check Pod Logs
+
 View logs of a specific pod. Note that a pod can have multiple containers. To find out which containers are running in a pod, use:
 
 ```sh
@@ -165,6 +177,7 @@ kubectl logs <pod-name> -n <namespace> -c <container-name>
 ```
 
 #### Debug Pods
+
 Open an interactive shell in a pod:
 
 ```sh
@@ -173,9 +186,10 @@ kubectl exec -it <pod-name> -n <namespace> -- /bin/sh
 
 These commands help diagnose and resolve issues in your Kubernetes cluster.
 
-###  Additional Resources
+### Additional Resources
 
 #### Learning Material
+
 - **[Kubernetes Documentation](https://kubernetes.io/docs/home/):** Comprehensive guides and references for all aspects of Kubernetes.
 - **[Kubernetes: The Documentary](https://www.youtube.com/watch?v=BE77h7dmoQU):** A video about the origins of Kubernetes.
 - **[The Illustrated Children's Guide to Kubernetes](https://www.youtube.com/watch?v=4ht22ReBjno):** A fun, illustrated video explaining Kubernetes basics.
@@ -183,8 +197,8 @@ These commands help diagnose and resolve issues in your Kubernetes cluster.
 - **[A Visual Guide on Troubleshooting Kubernetes Deployments](https://learnk8s.io/troubleshooting-deployments):** A visual guide to resolving common Kubernetes deployment issues.
 - **[Zero to JupyterHub with Kubernetes](https://z2jh.jupyter.org/en/stable/):** A comprehensive guide to deploying and managing JupyterHub on Kubernetes. Great for learning with its step-by-step instructions and practical examples, suitable for both beginners and advanced users.
 
-
 #### Useful tools
+
 - **[Minikube](https://minikube.sigs.k8s.io/docs/):** A tool that enables you to run a local Kubernetes cluster.
 - **[Kustomize](https://kustomize.io/):** A tool for managing Kubernetes objects through composition of bases and overlays.
 - **[kubectx](https://github.com/ahmetb/kubectx):** For managing multiple Kubernetes clusters.
@@ -193,5 +207,3 @@ These commands help diagnose and resolve issues in your Kubernetes cluster.
 - **[Argo CD](https://argoproj.github.io/cd/):** A declarative, GitOps-based continuous delivery tool for Kubernetes.
 - **[Rancher](https://rancher.com/):** A complete Kubernetes management platform that simplifies cluster deployment and management.
 - **[Podman](https://podman.io/):** A tool for managing OCI containers and pods, serving as an alternative to Docker.
-
-
