@@ -11,6 +11,16 @@ locals {
   operator_replica = length(var.servers) > 1 ? 2 : 1
 }
 
+resource "openstack_compute_servergroup_v2" "servers" {
+  name     = "${var.name}-servers"
+  policies = ["anti-affinity"]
+}
+
+resource "openstack_compute_servergroup_v2" "agents" {
+  name     = "${var.name}-servers"
+  policies = ["soft-anti-affinity"]
+}
+
 module "servers" {
   source = "./node"
 
@@ -33,7 +43,7 @@ module "servers" {
   boot_volume_type = each.value.boot_volume_type
 
   availability_zones = coalesce(each.value.availability_zones, [])
-  affinity           = coalesce(each.value.affinity, "soft-anti-affinity")
+  group_id           = each.value.group_id != null ? each.value.group_id : openstack_compute_servergroup_v2.servers.id
 
   rke2_version       = each.value.rke2_version
   rke2_config        = each.value.rke2_config
@@ -91,20 +101,20 @@ module "servers" {
         lb_provider         = var.lb_provider
         cluster_name        = var.name
       }),
-      (var.ff_patches ? "patches/rke2-cilium.yaml" : "cilium.yaml") : templatefile(var.ff_patches ? "${path.module}/patches/rke2-cilium.yaml.tpl" : "${path.module}/manifests/cilium.yaml.tpl", {
+      "patches/rke2-cilium.yaml" : templatefile("${path.module}/patches/rke2-cilium.yaml.tpl", {
         operator_replica = local.operator_replica
         apiserver_host   = local.internal_vip
         cluster_name     = var.name
         cluster_id       = var.cluster_id
       }),
-      (var.ff_patches ? "patches/rke2-coredns.yaml" : "coredns.yaml") : templatefile(var.ff_patches ? "${path.module}/patches/rke2-coredns.yaml.tpl" : "${path.module}/manifests/coredns.yaml.tpl", {
+      "patches/rke2-coredns.yaml" : templatefile("${path.module}/patches/rke2-coredns.yaml.tpl", {
         operator_replica = local.operator_replica
       }),
-      (var.ff_patches ? "patches/rke2-metrics-server.yaml" : "metrics-server.yaml") : templatefile(var.ff_patches ? "${path.module}/patches/rke2-metrics-server.yaml.tpl" : "${path.module}/manifests/metrics-server.yaml.tpl", {
+      "patches/rke2-metrics-server.yaml" : templatefile("${path.module}/patches/rke2-metrics-server.yaml.tpl", {
       }),
-      (var.ff_patches ? "patches/rke2-snapshot-controller.yaml" : "snapshot-controller.yaml") : templatefile(var.ff_patches ? "${path.module}/patches/rke2-snapshot-controller.yaml.tpl" : "${path.module}/manifests/snapshot-controller.yaml.tpl", {
+      "patches/rke2-snapshot-controller.yaml" : templatefile("${path.module}/patches/rke2-snapshot-controller.yaml.tpl", {
       }),
-      (var.ff_patches ? "patches/rke2-snapshot-validation-webhook.yaml" : "snapshot-validation-webhook.yaml") : templatefile(var.ff_patches ? "${path.module}/patches/rke2-snapshot-validation-webhook.yaml.tpl" : "${path.module}/manifests/snapshot-validation-webhook.yaml.tpl", {
+      "patches/rke2-snapshot-validation-webhook.yaml" : templatefile("${path.module}/patches/rke2-snapshot-validation-webhook.yaml.tpl", {
       }),
     },
     {
@@ -144,7 +154,7 @@ module "agents" {
   boot_volume_type = each.value.boot_volume_type
 
   availability_zones = coalesce(each.value.availability_zones, [])
-  affinity           = coalesce(each.value.affinity, "soft-anti-affinity")
+  group_id           = each.value.group_id != null ? each.value.group_id : openstack_compute_servergroup_v2.agents.id
 
   rke2_version       = each.value.rke2_version
   rke2_config        = each.value.rke2_config
