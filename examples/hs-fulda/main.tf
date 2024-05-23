@@ -1,4 +1,22 @@
+###########################################################
+# 
+# Author: Lucas Immanuel Nickel
+# Date: May 23, 2024
+# Remark: This code is not production ready as it disables certificate checks by default.
+#
+###########################################################
+
 locals {
+    ###########################################################
+    #
+    # Config parameters
+    #
+    # also add terraform.tfvars, see README at:
+    #
+    # https://github.com/srieger1/terraform-openstack-rke2/tree/hsfulda-example-2023-10/examples/hs-fulda
+    #
+    ###########################################################
+
     insecure         = true
     auth_url         = "https://10.32.4.182:5000/v3"
     object_store_url = "private-cloud2.informatik.hs-fulda.de:6780"
@@ -13,6 +31,8 @@ locals {
     dns_server       = "10.33.16.100"
     manifests_folder = "../../manifests"
     rke2_version     = "v1.28.4+rke2r1"
+
+    ###########################################################
 }
 
 module "rke2" {
