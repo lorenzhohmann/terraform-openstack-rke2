@@ -1,115 +1,209 @@
-# HS-Fulda NetLab OpenStack RKE2 example
+# HS-Fulda NetLab OpenStack RKE2 Example
 
-based on https://github.com/zifeo/terraform-openstack-rke2
+This guide outlines the steps to set up an RKE2 Kubernetes cluster on OpenStack using Terraform, based on [this repository](https://github.com/zifeo/terraform-openstack-rke2).
+
+## Attention
+
+This example implements the deactivation of the validation of all TLS certificates by default. **Never** use this code in a production environment.
 
 ## Usage
 
-Start by cloning the repo
+### Requirements
 
-```
-git clone -b hsfulda-example https://github.com/srieger1/terraform-openstack-rke2.git
+#### Linux
+
+The final step fetches the `kubeconfig` file for Kubernetes clients like `kubectl` and `helm` automatically using `rsync` and `yq`. Note that `rsync` is typically pre-installed on most Linux distributions. Install `yq` from [here](https://github.com/mikefarah/yq/releases).
+
+#### Windows
+
+The final step requires `rsync` and `yq`, which are not available by default on Windows. You have multiple options to handle this (see the table below).
+
+| Method                   | Description                                                                  | Commands/Instructions                                                                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SSH**                  | Manually log in and fetch `rke2.yaml` by assigning a temporary floating IP   | `ssh ubuntu@<floating-ip>`                                                                                                                            |
+| **SCP**                  | Use `scp` to copy the `kubeconfig` file by assigning a temporary floating IP | `scp ubuntu@<floating-ip>:/etc/rancher/rke2/CloudComp<your-group-number>-k8s.rke2.yaml`                                                               |
+| **WSL/WSL2**             | Use Windows Subsystem for Linux (WSL/WSL2) to run Terraform                  | Install `yq` from [here](https://github.com/mikefarah/yq/releases).                                                                                   |
+| **Install rsync and yq** | Install `rsync` and `yq` on Windows                                          | Install `rsync` from [here](https://www.rsync.net/resources/howto/windows_rsync.html) and `yq` from [here](https://github.com/mikefarah/yq/releases). |
+
+### Step 1: Clone the Repository
+
+```sh
+git clone https://github.com/srieger1/terraform-openstack-rke2.git
 ```
 
-Go to the example/hs-fulda folder and create a terraform.tfvars file
-containing your OpenStack credentials, e.g.:
+### Step 2: Configure Terraform Variables
 
-```
-project     = "CloudComp<your-group-number>"
-username    = "CloudComp<your-group-number>"
-password    = "<your-password>"
+Navigate to the `examples/hs-fulda` folder and create a `terraform.tfvars` file with your OpenStack credentials:
+
+```hcl
+project  = "CloudComp<your-group-number>"
+username = "CloudComp<your-group-number>"
+password = "<your-password>"
 ```
 
-Run terraform inside the folder:
+### Step 3: Initialize and Apply Terraform
 
-```
+Run the following commands inside the `examples/hs-fulda` folder:
+
+```sh
 terraform init
 terraform apply
 ```
 
-The final step of the terraform template fetches the kubeconfig
-file that can be used with regular Kubernetes clients/tools like
-kubectl, helm etc. To fetch the config file from the k8s server,
-the template uses rsync and yq. You can install yq from
-https://github.com/mikefarah/yq/releases.
-If you're using Windows, rsync is typcially not available. You can
-then use scp ```scp ubuntu@<floating-ip>:/etc/rancher/rke2/rke2.yml```
-to copy the file or ssh ```ssh ubuntu@<floating-ip>``` into the
-controller node that has kubectl already installed:
+### Step 4: Fetch kubeconfig File
 
-If stages fail, you can run ```terraform apply``` again. It will
-resume the deployment and execute the remaining steps. This is
-also possible after changing the cluster config by modifying
-the parameters (esp. cluster node count) in
-[main.tf](https://github.com/srieger1/terraform-openstack-rke2/blob/main/examples/hs-fulda/main.tf)
-to some extend (i.e., if you don't modify content that terraform
-is not able to handle correctly for redeployment).
+This step may take up to 10 minutes to complete as it involves setting up the cluster.
 
-Wait for the deployment to finish. Afterwards you can use kubectl,
-helm etc. to use your RKE2 Kubernetes cluster. You can see the
-status of your cluster using:
+#### Linux Users
 
+On Linux the `kubeconfig` file for Kubernetes clients like `kubectl` and `helm` is automatically fetched using `rsync` and `yq`. Note that `rsync` is typically pre-installed on most Linux distributions. Install `yq` from [here](https://github.com/mikefarah/yq/releases).
+
+#### Windows Users
+
+Since `rsync` and `yq` are not available by default on Windows, use one of the methods outlined in the table above to fetch the `kubeconfig` file.
+
+### Step 5: Handle Deployment Issues
+
+If any stages fail, rerun `terraform apply` to resume the deployment. If needed, modify cluster parameters (e.g., node count) in the `main.tf` file and rerun `terraform apply`.
+
+### Step 6: Use Your Kubernetes Cluster
+
+After deployment, set up your environment to use `kubectl`.
+
+#### For Linux Users:
+
+Set the `KUBECONFIG` environment variable:
+
+```sh
+export KUBECONFIG=CloudComp<your-group-number>-k8s.rke2.yaml
 ```
-kubectl --kubeconfig k8s.rke2.yaml get nodes -o wide
-kubectl --kubeconfig k8s.rke2.yaml get pods -n kube-system
+
+To continuously monitor the status of nodes and pods, use the `watch` command:
+
+```sh
+watch kubectl get nodes,pods -o wide -n kube-system
 ```
 
-After essential kube-system pods are deployed and running, you can
-deploy workloads to your cluster, e.g., wordpress:
+#### For Windows Users (PowerShell):
 
+Set the `KUBECONFIG` environment variable:
+
+```powershell
+$env:KUBECONFIG = "CloudComp<your-group-number>-k8s.rke2.yaml"
 ```
+
+To continuously monitor the status of nodes and pods, use the following loop in PowerShell:
+
+```powershell
+while ($true) {
+    kubectl get nodes,pods -o wide -n kube-system
+    Start-Sleep -Seconds 10
+    Clear-Host
+}
+```
+
+Within about four minutes, all pods should be running in the kube-system namespace. You can then deploy workloads, such as WordPress, using `helm`:
+
+```sh
 helm install my-release oci://registry-1.docker.io/bitnamicharts/wordpress
 ```
 
-You can see the deployment status of wordpress using:
+To check the deployment status:
 
-```
-export KUBECONFIG=k8s.rke2.yaml
-kubectl get svc --namespace default -w my-release-wordpress
-kubectl get pv --namespace default
-kubectl get pvc --namespace default
-kubectl get pods --namespace default
-...
+#### For Linux:
+
+```sh
+watch kubectl get svc,pv,pvc,pods -o wide --namespace default
 ```
 
-To do a clean delete, you should first delete the workloads that were
-deployed, as terraform only knows the initial state and additional
-volumes as well as load balancer are automatically deployed in OpenStack by
-the openstack-cloud-provider in the deployed RKE2 cluster (see, e.g.:
-```kubectl --kubeconfig k8s.rke2.yaml logs openstack-cloud-controller-manager-...```)
-and hence not included in the terraform state.
+#### For Windows (PowerShell):
 
+```powershell
+while ($true) {
+    kubectl get svc,pv,pvc,pods -o wide --namespace default
+    Start-Sleep -Seconds 10
+    Clear-Host
+}
 ```
-helm --kubeconfig k8s.rke2.yaml uninstall my-release
+
+Access WordPress using the `EXTERNAL-IP` from the `my-release-wordpress` LoadBalancer service:
+
+```sh
+kubectl get svc -n default -w my-release-wordpress
+```
+
+The allocation of `EXTERNAL-IP` can take a few minutes.
+
+### Step 7: Clean Up
+
+Before running `terraform destroy`, delete any workloads:
+
+```sh
+helm uninstall my-release
 terraform destroy
 ```
 
-Check that load balancers and volumes possibly created by the helm chart
-deployment and not contained in the terraform state, as descirbed above,
-are deleted.
+Make sure that you delete the volumes, load balancers, floating IPs, ports in the network, the subnet in the network, the network and the security groups created by the WordPress Helm Chart in OpenStack if the deprovisioning of the Kubernetes cluster is stuck.
 
-You can change the number of deployed agents/nodes, RKE2 version,
-volume sizes etc. by changing the parameters in
-[main.tf](https://github.com/srieger1/terraform-openstack-rke2/blob/main/hs-fulda/main.tf)
+### Troubleshooting Tips
 
-## Windows
+#### Describe Resources
 
-If you use a Windows machine to run terraform, the last step of the
-deployment, that fetches rke2.yaml kubeconfig file via ssh and rsync
-will fail if you don't have rsync and yq installed. No worries.
-The entire RKE2 setup will succeed in the background (on the
-deployed instances) regardless of that.
+Get detailed information about nodes, pods, services, or deployments:
 
-To use kubectl you can fetch the kubeconfig from /etc/rancher/rke2/rke2.yml
-from the server instance. You can login to the RKE2 server instance
-by using the floating IP created by terraform as shown for the
-failing SSH command and login using your SSH key. As soon as RKE2
-is ready, you find kubectl preinstalled on the instance and only need
-to install helm (https://helm.sh/docs/helm/helm_install/) if you want
-to follow the README.
+```sh
+kubectl describe <resource-type> <resource-name> -n <namespace>
+```
 
-Otherwise you can install rsync (https://www.rsync.net/resources/howto/windows_rsync.html)
-and yq (https://github.com/mikefarah/yq/releases) on your Windows
-machine.
+Examples:
 
-Another option is to install Windows Subsystem for Linux (WSL/WSL2)
-providing rsync and run terraform from there.
+- Nodes: `kubectl describe nodes`
+- Pods: `kubectl describe pod <pod-name> -n <namespace>`
+- Services: `kubectl describe service <service-name> -n <namespace>`
+- Deployments: `kubectl describe deployment <deployment-name> -n <namespace>`
+
+#### Check Pod Logs
+
+View logs of a specific pod. Note that a pod can have multiple containers. To find out which containers are running in a pod, use:
+
+```sh
+kubectl get pod <pod-name> -n <namespace> -o jsonpath='{.spec.containers[*].name}'
+```
+
+Then, use the `-c <container-name>` option to specify a container if needed:
+
+```sh
+kubectl logs <pod-name> -n <namespace> -c <container-name>
+```
+
+#### Debug Pods
+
+Open an interactive shell in a pod:
+
+```sh
+kubectl exec -it <pod-name> -n <namespace> -- /bin/sh
+```
+
+These commands help diagnose and resolve issues in your Kubernetes cluster.
+
+### Additional Resources
+
+#### Learning Material
+
+- **[Kubernetes Documentation](https://kubernetes.io/docs/home/):** Comprehensive guides and references for all aspects of Kubernetes.
+- **[Kubernetes: The Documentary](https://www.youtube.com/watch?v=BE77h7dmoQU):** A video about the origins of Kubernetes.
+- **[The Illustrated Children's Guide to Kubernetes](https://www.youtube.com/watch?v=4ht22ReBjno):** A fun, illustrated video explaining Kubernetes basics.
+- **[Never install locally](https://www.youtube.com/watch?v=J0NuOlA2xDc):** A video that introduces the concepts of containerisation and orchestration.
+- **[A Visual Guide on Troubleshooting Kubernetes Deployments](https://learnk8s.io/troubleshooting-deployments):** A visual guide to resolving common Kubernetes deployment issues.
+- **[Zero to JupyterHub with Kubernetes](https://z2jh.jupyter.org/en/stable/):** A comprehensive guide to deploying and managing JupyterHub on Kubernetes. Great for learning with its step-by-step instructions and practical examples, suitable for both beginners and advanced users.
+
+#### Useful tools
+
+- **[Minikube](https://minikube.sigs.k8s.io/docs/):** A tool that enables you to run a local Kubernetes cluster.
+- **[Kustomize](https://kustomize.io/):** A tool for managing Kubernetes objects through composition of bases and overlays.
+- **[kubectx](https://github.com/ahmetb/kubectx):** For managing multiple Kubernetes clusters.
+- **[k9s](https://github.com/derailed/k9s):** For an enhanced terminal-based UI for Kubernetes.
+- **[Network Policy Editor](https://editor.networkpolicy.io/):** For easy editing of network policies.
+- **[Argo CD](https://argoproj.github.io/cd/):** A declarative, GitOps-based continuous delivery tool for Kubernetes.
+- **[Rancher](https://rancher.com/):** A complete Kubernetes management platform that simplifies cluster deployment and management.
+- **[Podman](https://podman.io/):** A tool for managing OCI containers and pods, serving as an alternative to Docker.
