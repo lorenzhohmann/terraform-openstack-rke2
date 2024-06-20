@@ -142,8 +142,8 @@ Before running `terraform destroy`, delete any workloads:
 helm uninstall my-release
 terraform destroy
 ```
-
-Make sure that you delete the volumes, load balancers, floating IPs, ports in the network, the subnet in the network, the network and the security groups created by the WordPress Helm Chart in OpenStack if the deprovisioning of the Kubernetes cluster is stuck.
+**If terraform destroy is stuck:**
+Make sure that you delete the CSI volumes, load balancers with k8s in name, floating IPs, ports in the network, the subnet in the network, the network and the security groups created by the WordPress Helm Chart in OpenStack.
 
 ### Troubleshooting Tips
 
