@@ -1,8 +1,9 @@
 ###########################################################
 # 
-# Author: Lucas Immanuel Nickel
+# Author: Lucas Immanuel Nickel, Sebastian Rieger
 # Date: May 23, 2024
-# Remark: This code is not production ready as it disables certificate checks by default.
+# Remark: This code is not production ready as it disables certificate checks by default
+# and sets kubeconfig file access to 644 instead of default 600
 #
 ###########################################################
 
@@ -27,9 +28,10 @@ locals {
     flavor_name      = "m1.medium"
     system_user      = "ubuntu"
     floating_ip_pool = "ext_net"
-    ssh_pubkey_file  = "~/.ssh/id_ed25519.pub"
+    ssh_pubkey_file  = "~/.ssh/id_rsa.pub"
+    #ssh_pubkey_file  = "~/.ssh/id_ed25519.pub"
     dns_server       = "10.33.16.100"
-    manifests_folder = "../../manifests"
+    manifests_folder = "./hsfd-manifests"
     rke2_version     = "v1.28.4+rke2r1"
 
     ###########################################################
@@ -57,12 +59,14 @@ module "rke2" {
     rke2_volume_device = "/dev/vdb"
     rke2_config = <<EOF
 # https://docs.rke2.io/install/install_options/server_config/
+write-kubeconfig-mode: "0644"
 EOF
   }]
 
   agents = [
     {
       name        = "pool"
+      #nodes_count = 1
       nodes_count = 3
       flavor_name = local.flavor_name
       image_name  = local.image_name
