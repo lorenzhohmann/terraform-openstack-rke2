@@ -10,7 +10,7 @@ variable "insecure" {
 
 variable "ssh_authorized_keys" {
   type    = list(string)
-  default = ["~/.ssh/id_rsa.pub"]
+  default = []
 }
 
 variable "floating_pool" {
@@ -18,18 +18,18 @@ variable "floating_pool" {
 }
 
 variable "rules_ssh_cidr" {
-  type = string
+  type = list(string)
   validation {
-    condition     = can(cidrnetmask(var.rules_ssh_cidr)) || var.rules_ssh_cidr == null
-    error_message = "Must be a valid IPv4 CIDR block or null (no access)"
+    condition     = var.rules_ssh_cidr == null ? true : alltrue([for r in var.rules_ssh_cidr : can(cidrnetmask(r))])
+    error_message = "Must be a valid IPv4 CIDR list or null (no access)"
   }
 }
 
 variable "rules_k8s_cidr" {
-  type = string
+  type = list(string)
   validation {
-    condition     = can(cidrnetmask(var.rules_k8s_cidr)) || var.rules_k8s_cidr == null
-    error_message = "Must be a valid IPv4 CIDR block or null (no access)"
+    condition     = var.rules_k8s_cidr == null ? true : alltrue([for r in var.rules_k8s_cidr : can(cidrnetmask(r))])
+    error_message = "Must be a valid IPv4 CIDR list or null (no access)"
   }
 }
 
@@ -87,6 +87,11 @@ variable "subnet_agents_cidr" {
 variable "subnet_lb_cidr" {
   type    = string
   default = "192.168.44.0/24"
+}
+
+variable "vip_interface" {
+  type    = string
+  default = "ens3"
 }
 
 variable "dns_nameservers4" {
@@ -291,4 +296,9 @@ variable "ff_native_backup" {
 variable "ff_wait_ready" {
   type    = bool
   default = true
+}
+
+variable "ff_infomaniak_sc" {
+  type    = bool
+  default = false
 }

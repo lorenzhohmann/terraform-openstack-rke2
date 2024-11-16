@@ -60,12 +60,13 @@ module "servers" {
   keypair_name        = openstack_compute_keypair_v2.key.name
   ssh_authorized_keys = local.ssh_authorized_keys
 
-  network_id   = openstack_networking_network_v2.net.id
-  subnet_id    = openstack_networking_subnet_v2.servers.id
-  secgroup_id  = openstack_networking_secgroup_v2.server.id
-  internal_vip = local.internal_vip
-  bastion_host = local.external_ip
-  san          = distinct(concat([local.external_ip, local.internal_vip], var.additional_san))
+  network_id    = openstack_networking_network_v2.net.id
+  subnet_id     = openstack_networking_subnet_v2.servers.id
+  secgroup_id   = openstack_networking_secgroup_v2.server.id
+  internal_vip  = local.internal_vip
+  vip_interface = var.vip_interface
+  bastion_host  = local.external_ip
+  san           = distinct(concat([local.external_ip, local.internal_vip], var.additional_san))
 
   manifests_folder = var.manifests_folder
   manifests = merge(
@@ -119,6 +120,39 @@ module "servers" {
       "patches/rke2-snapshot-validation-webhook.yaml" : templatefile("${path.module}/patches/rke2-snapshot-validation-webhook.yaml.tpl", {
       }),
     },
+    var.ff_infomaniak_sc ? merge([for perf in ["perf1", "perf2", "perf3"] : {
+      "sc-ceph-${perf}-delete.yaml" : templatefile("${path.module}/manifests/csi-cinder-sc.yaml.tpl", {
+        name          = "ceph-${perf}-delete"
+        reclaimPolicy = "Delete"
+        is_default    = false
+        parameters = {
+          type = "CEPH_1_${perf}"
+        }
+      })
+    }]...) : {},
+    var.ff_infomaniak_sc ? merge([for perf in ["perf1", "perf2", "perf3"] : {
+      "sc-ceph-${perf}-retain.yaml" : templatefile("${path.module}/manifests/csi-cinder-sc.yaml.tpl", {
+        name          = "ceph-${perf}-retain"
+        reclaimPolicy = "Retain"
+        is_default    = perf == "perf1"
+        parameters = {
+          type = "CEPH_1_${perf}"
+        }
+      })
+      }]...) : {
+      "csi-cinder-retain.yaml" : templatefile("${path.module}/manifests/csi-cinder-sc.yaml.tpl", {
+        name          = "csi-cinder-retain",
+        reclaimPolicy = "Retain"
+        is_default    = true
+        parameters    = {}
+      }),
+      "csi-cinder-delete.yaml" : templatefile("${path.module}/manifests/csi-cinder-sc.yaml.tpl", {
+        name          = "csi-cinder-delete"
+        reclaimPolicy = "Delete"
+        is_default    = false
+        parameters    = {}
+      })
+    },
     {
       for f in fileset(path.module, "manifests/*.{yml,yaml}") : basename(f) => file("${path.module}/${f}")
     },
@@ -169,11 +203,12 @@ module "agents" {
   keypair_name        = openstack_compute_keypair_v2.key.name
   ssh_authorized_keys = local.ssh_authorized_keys
 
-  network_id   = openstack_networking_network_v2.net.id
-  subnet_id    = openstack_networking_subnet_v2.agents.id
-  secgroup_id  = openstack_networking_secgroup_v2.agent.id
-  internal_vip = local.internal_vip
-  bastion_host = local.external_ip
+  network_id    = openstack_networking_network_v2.net.id
+  subnet_id     = openstack_networking_subnet_v2.agents.id
+  secgroup_id   = openstack_networking_secgroup_v2.agent.id
+  internal_vip  = local.internal_vip
+  vip_interface = var.vip_interface
+  bastion_host  = local.external_ip
 
   ff_autoremove_agent = var.ff_autoremove_agent
   ff_wait_ready       = var.ff_wait_ready
