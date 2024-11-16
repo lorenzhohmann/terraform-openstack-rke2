@@ -13,7 +13,7 @@ terraform {
     openstack = {
       source = "terraform-provider-openstack/openstack"
       # 2.0.x is maybe affected by https://github.com/terraform-provider-openstack/terraform-provider-openstack/issues/1601
-      version = "~> 2.0.0"
+      version = "~> 3.0.0"
     }
   }
 }

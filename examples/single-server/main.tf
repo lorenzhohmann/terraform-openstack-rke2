@@ -7,7 +7,7 @@ module "rke2" {
   # only on the first run for high-availability cluster 
   bootstrap           = true
   name                = "single-server"
-  ssh_authorized_keys = ["~/.ssh/id_rsa.pub"]
+  ssh_authorized_keys = ["~/.ssh/id_openstack.pub"]
   floating_pool       = "ext-floating1"
   # should be restricted to a secure bastion
   rules_ssh_cidr = "0.0.0.0/0"

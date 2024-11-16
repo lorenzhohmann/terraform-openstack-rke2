@@ -19,17 +19,17 @@ locals {
     ###########################################################
 
     insecure         = true
-    auth_url         = "https://10.32.4.182:5000/v3"
-    object_store_url = "private-cloud2.informatik.hs-fulda.de:6780"
+    auth_url         = "https://10.32.7.184:5000/v3"
+    object_store_url = "private-cloud.informatik.hs-fulda.de:6780"
     region           = "RegionOne"
 
     cluster_name     = "${var.project}-k8s"
-    image_name       = "ubuntu-22.04-jammy-x86_64"
-    flavor_name      = "m1.medium"
+    image_name       = "ubuntu-22.04-jammy-server-cloud-image-amd64"
+    flavor_name      = "m1.large"
     system_user      = "ubuntu"
     floating_ip_pool = "ext_net"
-    ssh_pubkey_file  = "~/.ssh/id_rsa.pub"
-    #ssh_pubkey_file  = "~/.ssh/id_ed25519.pub"
+    #ssh_pubkey_file  = "~/.ssh/id_rsa.pub"
+    ssh_pubkey_file  = "~/.ssh/id_openstack.pub"
     dns_server       = "10.33.16.100"
     manifests_folder = "./hsfd-manifests"
     rke2_version     = "v1.28.4+rke2r1"
@@ -53,9 +53,9 @@ module "rke2" {
     flavor_name = local.flavor_name
     image_name  = local.image_name
     system_user = local.system_user
-    boot_volume_size = 8
+    boot_volume_size = 32
     rke2_version     = local.rke2_version
-    rke2_volume_size = 8
+    rke2_volume_size = 32
     rke2_volume_device = "/dev/vdb"
     rke2_config = <<EOF
 # https://docs.rke2.io/install/install_options/server_config/
@@ -71,9 +71,9 @@ EOF
       flavor_name = local.flavor_name
       image_name  = local.image_name
       system_user = local.system_user
-      boot_volume_size = 8
+      boot_volume_size = 32
       rke2_version     = local.rke2_version
-      rke2_volume_size = 8
+      rke2_volume_size = 32
       rke2_volume_device = "/dev/vdb"
     }
   ]
@@ -89,29 +89,29 @@ EOF
 
   kube_apiserver_resources = {
     requests = {
-      cpu    = "75m"
-      memory = "128M"
+      cpu    = "150m"
+      memory = "256M"
     }
   }
 
   kube_scheduler_resources = {
     requests = {
-      cpu    = "75m"
-      memory = "128M"
+      cpu    = "150m"
+      memory = "256M"
     }
   }
 
   kube_controller_manager_resources = {
     requests = {
-      cpu    = "75m"
-      memory = "128M"
+      cpu    = "150m"
+      memory = "256M"
     }
   }
 
   etcd_resources = {
     requests = {
-      cpu    = "75m"
-      memory = "128M"
+      cpu    = "150m"
+      memory = "256M"
     }
   }
 
@@ -150,7 +150,7 @@ terraform {
   required_providers {
     openstack = {
       source  = "terraform-provider-openstack/openstack"
-      version = ">= 2.0.0"
+      version = ">= 3.0.0"
     }
   }
 }
